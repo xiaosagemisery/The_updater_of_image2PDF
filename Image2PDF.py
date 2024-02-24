@@ -1,15 +1,3 @@
-# -*- coding: utf-8 -*-
-# -------------------------------------------------------------------------------
-# @File     : Convert2PDF.py
-# @Created  : 2017/12/25 下午3:03
-# @Software : PyCharm
-# 
-# @Author   : Liu.Qi
-# @Contact  : liuqi_0725@aliyun.com
-# 
-# @Desc     : 目的?
-# -------------------------------------------------------------------------------
-
 import os
 
 from reportlab.platypus import SimpleDocTemplate,Image, PageBreak
@@ -111,7 +99,8 @@ def convert_images2PDF_more_dirs(dirPath):
 
             real_filename = os.path.join(parent, filename)
             # 取父文件夹名称为书名
-            parentDirName = real_filename.split('/')[-2]
+            parentDirName = os.path.basename(os.path.dirname(real_filename))
+
 
             if parentDirName in __dirs.keys():
                 dirJsonData = __dirs[parentDirName]
@@ -134,9 +123,9 @@ def convert_images2PDF_more_dirs(dirPath):
 
         if dirData['isBook']:
             print("[*][转换PDF] : 开始. [名称] > [%s]" % (dirName))
-            beginTime = time.clock()
+            beginTime = time.perf_counter()
             __converted(os.path.join(dirPath,(dirData['name'] + ".pdf")) , dirData['pages'])
-            endTime = time.clock()
+            endTime = time.perf_counter()
             print("[*][转换PDF] : 结束. [名称] > [%s] , 耗时 %f s " % (dirName, (endTime - beginTime)))
             index += 1
 
@@ -217,3 +206,8 @@ class ImageTools:
     def getImageSize(self, imagePath):
         img = pilImage.open(imagePath)
         return img.size
+
+if __name__ == "__main__":
+    print("脚本开始执行...")
+    convert_images2PDF_more_dirs(os.getcwd())
+    print("脚本执行完成...")
