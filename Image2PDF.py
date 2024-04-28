@@ -1,10 +1,5 @@
 import os
-
-from reportlab.platypus import SimpleDocTemplate,Image, PageBreak
-from reportlab.lib.pagesizes import A4, landscape
-
 import time
-
 from PIL import Image as pilImage
 
 # 支持的图片类型
@@ -45,7 +40,7 @@ def convert_images2PDF_one_dir(file_dir,save_name=None ,filename_sort_fn=None):
     '''
     book_pages = []
 
-    for parent, dirnames ,filenames in os.walk(file_dir):
+    for parent, dirnames, filenames in os.walk(file_dir):
 
         # 只遍历最顶层
         if parent != file_dir :
@@ -86,7 +81,6 @@ def convert_images2PDF_more_dirs(dirPath):
     __dirs = {}
 
     for parent, dirnames, filenames in os.walk(dirPath):
-
         for dirname in dirnames:
             # 假设每个文件夹下都有图片，都是一本书
             dirData = {"name": "", "pages": [], "isBook": False}
@@ -100,6 +94,7 @@ def convert_images2PDF_more_dirs(dirPath):
             real_filename = os.path.join(parent, filename)
             # 取父文件夹名称为书名
             parentDirName = os.path.basename(os.path.dirname(real_filename))
+            print(parentDirName)
 
 
             if parentDirName in __dirs.keys():
@@ -143,7 +138,9 @@ def __isAllow_file(filepath):
 
     return False
 
-def __converted(save_book_name,book_pages=[],filename_sort_fn=None):
+from reportlab.pdfgen import canvas
+
+def __converted(save_book_name, book_pages=[], filename_sort_fn=None):
     """
     开始转换
     :param book_name: 保存的文件名(包含路径)
@@ -152,54 +149,31 @@ def __converted(save_book_name,book_pages=[],filename_sort_fn=None):
     :return:
     """
 
-    # A4 纸的宽高
-    __a4_w, __a4_h = landscape(A4)
-
     # 对数据进行排序
-    if (filename_sort_fn == None):
-        # 将按图片按名称的ASCII排序以避免错乱问题
+    if filename_sort_fn is None:
         book_pages.sort()
     else:
-        # lambda 匿名函数, 第一个参数定义函数入参,第二个为参数的处理表达式
-        # 这样理解
-        # def getName(name):
-        #   return name.split("-")[1]
-        #
-        # 用匿名函数就这么表示
-        # name = lambda name:name.split("-")[1]
-        # xname = name("haha-dd-23")
-        #
-        # 支持多个参数
-        #
         book_pages = sorted(book_pages, key=lambda name: int(filename_sort_fn(name)))
 
-    bookPagesData = []
-
-    bookDoc = SimpleDocTemplate(save_book_name, pagesize=A4, rightMargin=72, leftMargin=72, topMargin=72, bottomMargin=18)
+    # 使用Canvas来创建PDF，因为需要为每页单独设置大小
+    c = canvas.Canvas(save_book_name)
 
     for page in book_pages:
+        img = pilImage.open(page)
+        img_w, img_h = img.size
 
-        img_w, img_h = ImageTools().getImageSize(page)
+        # 为当前页面设置尺寸
+        c.setPageSize((img_w, img_h))
 
-        # img_w = img.imageWidth
-        # img_h = img.imageHeight
+        # 将图片添加到页面
+        c.drawImage(page, 0, 0, width=img_w, height=img_h)
+        c.showPage()  # 结束当前页并开始新的一页
 
+    # 保存PDF文件
+    c.save()
 
-        if __a4_w / img_w < __a4_h / img_h:
-            ratio = __a4_w / img_w
-        else:
-            ratio = __a4_h / img_h
+    print("[*][转换PDF] : 已保存. [路径] > [%s]" % save_book_name)
 
-        data = Image(page, img_w * ratio, img_h * ratio)
-        bookPagesData.append(data)
-        bookPagesData.append(PageBreak())
-
-    try:
-        bookDoc.build(bookPagesData)
-        # print("已转换 >>>> " + bookName)
-    except Exception as err:
-        print("[*][转换PDF] : 错误. [名称] > [%s]" % (save_book_name))
-        print("[*] Exception >>>> ", err)
 
 
 class ImageTools:
@@ -208,6 +182,7 @@ class ImageTools:
         return img.size
 
 if __name__ == "__main__":
+    comic_path = ''
     print("脚本开始执行...")
-    convert_images2PDF_more_dirs(os.getcwd())
+    convert_images2PDF_more_dirs(comic_path)
     print("脚本执行完成...")
