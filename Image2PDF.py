@@ -1,13 +1,14 @@
 import os
 import time
 from PIL import Image as pilImage
+from reportlab.pdfgen import canvas
 
 # 支持的图片类型
-__allow_type = [".jpg", ".jpeg", ".bmp", ".png"]
+__allow_type = {".jpg", ".jpeg", ".bmp", ".png"}
 
 __rootDir = ""
 
-def convert_images2PDF_one_dir(file_dir,save_name=None ,filename_sort_fn=None):
+def convert_images2PDF_one_dir(file_dir, save_name=None, filename_sort_fn=None):
     '''
     转换一个目录文件夹下的图片至 PDF
     :param file_dir:
@@ -54,23 +55,23 @@ def convert_images2PDF_one_dir(file_dir,save_name=None ,filename_sort_fn=None):
                 book_pages.append(file_path)
 
         # 取当前目录的文件名为书名
-        if save_name == None :
-            save_name = os.path.join(file_dir,(os.path.basename(file_dir) + ".pdf"))
+        if save_name is None:
+            pdf_save_name = os.path.join(file_dir, (os.path.basename(file_dir) + ".pdf"))
         else :
-            save_name = os.path.join(file_dir,save_name)
+            pdf_save_name = os.path.join(file_dir, save_name)
 
         if len(book_pages) > 0 :
             # 开始转换
-            print("[*][转换PDF] : 开始. [保存路径] > [%s]" % (save_name))
-            beginTime = time.clock()
-            __converted(save_name , book_pages ,filename_sort_fn)
-            endTime = time.clock()
-            print("[*][转换PDF] : 结束. [保存路径] > [%s] , 耗时 %f s " % (save_name, (endTime - beginTime)))
+            print("[*][转换PDF] : 开始. [保存路径] > [%s]" % (pdf_save_name))
+            beginTime = time.perf_counter()
+            __converted(pdf_save_name, book_pages, filename_sort_fn)
+            endTime = time.perf_counter()
+            print("[*][转换PDF] : 结束. [保存路径] > [%s] , 耗时 %f s " % (pdf_save_name, (endTime - beginTime)))
         else :
             print("该目录下没有找到任何图片文件.如果是多重目录,尝试使用 convert_images2PDF_more_dirs 函数")
 
 
-def convert_images2PDF_more_dirs(dirPath):
+def convert_images2PDF_more_dirs(dirPath, filename_sort_fn=None):
     """
     转换一个目录文件夹下的图片至 PDF
     :param file_dir:
@@ -78,53 +79,34 @@ def convert_images2PDF_more_dirs(dirPath):
     """
 
     # 已经找到目录
-    __dirs = {}
+    dirs = {}
 
     for parent, dirnames, filenames in os.walk(dirPath):
-        for dirname in dirnames:
-            # 假设每个文件夹下都有图片，都是一本书
-            dirData = {"name": "", "pages": [], "isBook": False}
-            dirName = dirname.split('/')[0]
-            dirData['name'] = dirName
-            __dirs[dirName] = dirData
-
         # 查找有无图片
         for filename in filenames:
-
             real_filename = os.path.join(parent, filename)
-            # 取父文件夹名称为书名
-            parentDirName = os.path.basename(os.path.dirname(real_filename))
-            print(parentDirName)
-
-
-            if parentDirName in __dirs.keys():
-                dirJsonData = __dirs[parentDirName]
-            else:
-                continue
 
             # 检查是否图片
             if __isAllow_file(real_filename) :
                 # 将图片添加至书本
-                dirJsonData['pages'].append(real_filename)
-
-                # 如果该书的isbook 是false 改为true
-                if not dirJsonData['isBook']:
-                    dirJsonData['isBook'] = True
+                dirs.setdefault(parent, []).append(real_filename)
 
     index = 1
-    for dirName in __dirs.keys():
+    used_names = set()
+    for dir_path in sorted(dirs.keys()):
 
-        dirData = __dirs[dirName]
+        pages = dirs[dir_path]
+        dirName = os.path.basename(dir_path)
+        save_name = __unique_pdf_name(dirPath, dir_path, used_names)
 
-        if dirData['isBook']:
-            print("[*][转换PDF] : 开始. [名称] > [%s]" % (dirName))
-            beginTime = time.perf_counter()
-            __converted(os.path.join(dirPath,(dirData['name'] + ".pdf")) , dirData['pages'])
-            endTime = time.perf_counter()
-            print("[*][转换PDF] : 结束. [名称] > [%s] , 耗时 %f s " % (dirName, (endTime - beginTime)))
-            index += 1
+        print("[*][转换PDF] : 开始. [名称] > [%s]" % (dirName))
+        beginTime = time.perf_counter()
+        __converted(save_name, pages, filename_sort_fn)
+        endTime = time.perf_counter()
+        print("[*][转换PDF] : 结束. [名称] > [%s] , 耗时 %f s " % (dirName, (endTime - beginTime)))
+        index += 1
 
-    print("[*][所有转换完成] : 本次转换检索目录数 %d 个，共转换的PDF %d 本 " % (len(__dirs), index - 1))
+    print("[*][所有转换完成] : 本次转换检索目录数 %d 个，共转换的PDF %d 本 " % (len(dirs), index - 1))
 
 
 def __isAllow_file(filepath):
@@ -133,14 +115,39 @@ def __isAllow_file(filepath):
     :param file:
     :return:
     """
-    if filepath and (os.path.splitext(filepath)[1] in __allow_type):
+    if filepath and (os.path.splitext(filepath)[1].lower() in __allow_type):
         return True
 
     return False
 
-from reportlab.pdfgen import canvas
 
-def __converted(save_book_name, book_pages=[], filename_sort_fn=None):
+
+def __unique_pdf_name(root_dir, image_dir, used_names):
+    base_name = os.path.basename(image_dir) or os.path.basename(os.path.abspath(image_dir))
+    pdf_name = base_name + ".pdf"
+
+    if pdf_name in used_names:
+        relative_name = os.path.relpath(image_dir, root_dir).replace(os.sep, "_")
+        pdf_name = relative_name + ".pdf"
+
+    stem, ext = os.path.splitext(pdf_name)
+    suffix = 2
+    while pdf_name in used_names:
+        pdf_name = "%s_%d%s" % (stem, suffix, ext)
+        suffix += 1
+
+    used_names.add(pdf_name)
+    return os.path.join(root_dir, pdf_name)
+
+
+def __sort_pages(book_pages, filename_sort_fn=None):
+    if filename_sort_fn is None:
+        return sorted(book_pages)
+
+    return sorted(book_pages, key=lambda name: int(filename_sort_fn(name)))
+
+
+def __converted(save_book_name, book_pages=None, filename_sort_fn=None):
     """
     开始转换
     :param book_name: 保存的文件名(包含路径)
@@ -150,24 +157,21 @@ def __converted(save_book_name, book_pages=[], filename_sort_fn=None):
     """
 
     # 对数据进行排序
-    if filename_sort_fn is None:
-        book_pages.sort()
-    else:
-        book_pages = sorted(book_pages, key=lambda name: int(filename_sort_fn(name)))
+    book_pages = __sort_pages(book_pages or [], filename_sort_fn)
 
     # 使用Canvas来创建PDF，因为需要为每页单独设置大小
     c = canvas.Canvas(save_book_name)
 
     for page in book_pages:
-        img = pilImage.open(page)
-        img_w, img_h = img.size
+        with pilImage.open(page) as img:
+            img_w, img_h = img.size
 
-        # 为当前页面设置尺寸
-        c.setPageSize((img_w, img_h))
+            # 为当前页面设置尺寸
+            c.setPageSize((img_w, img_h))
 
-        # 将图片添加到页面
-        c.drawImage(page, 0, 0, width=img_w, height=img_h)
-        c.showPage()  # 结束当前页并开始新的一页
+            # 将图片添加到页面
+            c.drawImage(page, 0, 0, width=img_w, height=img_h)
+            c.showPage()  # 结束当前页并开始新的一页
 
     # 保存PDF文件
     c.save()
@@ -178,11 +182,11 @@ def __converted(save_book_name, book_pages=[], filename_sort_fn=None):
 
 class ImageTools:
     def getImageSize(self, imagePath):
-        img = pilImage.open(imagePath)
-        return img.size
+        with pilImage.open(imagePath) as img:
+            return img.size
 
 if __name__ == "__main__":
-    comic_path = ''
+    comic_path = r'Y:\Library\comic\龙珠'
     print("脚本开始执行...")
     convert_images2PDF_more_dirs(comic_path)
     print("脚本执行完成...")

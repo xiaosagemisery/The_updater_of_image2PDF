@@ -1,29 +1,60 @@
 # -*- coding: utf-8 -*-
-# -------------------------------------------------------------------------------
-# @File     : test.py
-# @Created  : 2017/12/25 下午1:21
-# @Software : PyCharm
-# 
-# @Author   : Liu.Qi
-# @Contact  : liuqi_0725@aliyun.com
-# 
-# @Desc     : 目的?
-# -------------------------------------------------------------------------------
 
-from Image2PDF import convert_images2PDF_one_dir,convert_images2PDF_more_dirs
+from pathlib import Path
 
-def name_val(file_path):
-    # 文件路径为 /Users/alexliu/test/one_book/test_hello_img_*.jpg
-    names = file_path.split("_")
-    names = names[3].split(".")
-    # names [0] 为 *.jpg 的数字表示
-    return names[0]
+import Image2PDF as image2pdf
 
-# 转换一本书,按照数组的sort的排序规则排序  名称可以为空
-# convert_images2PDF_one_dir("/Users/alexliu/test/one_book",save_name="test.pdf")
 
-# 转换一本书,并且执行排序的回调函数 名称为 test_hello_img_1.jpg 这种类型,我要按照 数字排序
-# convert_images2PDF_one_dir("/Users/alexliu/test/one_book",filename_sort_fn=name_val)
+def test_allowed_extensions_are_case_insensitive():
+    assert image2pdf.__isAllow_file("scan.JPG")
+    assert image2pdf.__isAllow_file("scan.PnG")
+    assert not image2pdf.__isAllow_file("scan.txt")
 
-# 转换多本书
-convert_images2PDF_more_dirs("/Users/alexliu/test/books")
+
+def test_sort_pages_uses_callback_without_mutating_input():
+    pages = [
+        "test_01_doc_11.png",
+        "test_01_doc_2.png",
+        "test_01_doc_1.png",
+    ]
+
+    sorted_pages = image2pdf.__sort_pages(
+        pages,
+        lambda name: Path(name).stem.split("_")[-1],
+    )
+
+    assert sorted_pages == [
+        "test_01_doc_1.png",
+        "test_01_doc_2.png",
+        "test_01_doc_11.png",
+    ]
+    assert pages == [
+        "test_01_doc_11.png",
+        "test_01_doc_2.png",
+        "test_01_doc_1.png",
+    ]
+
+
+def test_more_dirs_uses_full_directory_paths_and_unique_pdf_names(tmp_path, monkeypatch):
+    first_book = tmp_path / "a" / "same"
+    second_book = tmp_path / "b" / "same"
+    first_book.mkdir(parents=True)
+    second_book.mkdir(parents=True)
+    (first_book / "page_1.JPG").write_bytes(b"not a real image")
+    (second_book / "page_1.png").write_bytes(b"not a real image")
+
+    captured = []
+
+    def fake_convert(save_name, pages, filename_sort_fn=None):
+        captured.append((Path(save_name).name, [Path(page).name for page in pages]))
+
+    monkeypatch.setattr(image2pdf, "__converted", fake_convert)
+
+    image2pdf.convert_images2PDF_more_dirs(str(tmp_path))
+
+    output_names = {name for name, pages in captured}
+    assert len(captured) == 2
+    assert "same.pdf" in output_names
+    assert len(output_names) == 2
+    assert any(name.endswith("_same.pdf") for name in output_names)
+    assert {pages[0] for name, pages in captured} == {"page_1.JPG", "page_1.png"}
