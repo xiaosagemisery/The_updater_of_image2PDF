@@ -1,0 +1,264 @@
+:root {
+  --bg: #f5f6f8;
+  --panel-bg: #ffffff;
+  --text: #1c1e21;
+  --muted: #6b7280;
+  --border: #e2e4e9;
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --danger: #dc2626;
+  --radius: 8px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #16171a;
+    --panel-bg: #1f2023;
+    --text: #eaeaec;
+    --muted: #9aa0aa;
+    --border: #303236;
+    --accent: #3b82f6;
+    --accent-hover: #60a5fa;
+    --danger: #f87171;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.topbar {
+  padding: 20px 24px 8px;
+}
+.topbar h1 { margin: 0 0 4px; font-size: 1.4rem; }
+.subtitle { margin: 0; color: var(--muted); font-size: 0.9rem; }
+
+main {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 12px 24px 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.panel {
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+}
+.panel h2 { margin: 0 0 12px; font-size: 1.05rem; }
+
+.path-input-row { display: flex; gap: 8px; margin-bottom: 10px; }
+.path-input-row input {
+  flex: 1;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.9rem;
+}
+
+button {
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel-bg);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+button:hover:not(:disabled) { border-color: var(--accent); }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+button.primary:hover:not(:disabled) { background: var(--accent-hover); }
+
+.drive-chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.drive-chips button { padding: 6px 12px; }
+
+.breadcrumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-bottom: 8px;
+  min-height: 1.4em;
+}
+.breadcrumbs button {
+  border: none;
+  background: none;
+  padding: 2px 4px;
+  color: var(--accent);
+  font-size: 0.85rem;
+}
+.breadcrumbs .sep { color: var(--muted); }
+
+.browse-error {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  color: var(--danger);
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  font-size: 0.85rem;
+  margin-bottom: 8px;
+}
+
+.dir-list-row { display: flex; flex-direction: column; gap: 6px; }
+#up-btn { align-self: flex-start; margin-bottom: 4px; }
+
+.dir-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 260px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.dir-list li {
+  padding: 8px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.9rem;
+}
+.dir-list li:last-child { border-bottom: none; }
+.dir-list li:hover { background: var(--bg); }
+.dir-list .empty-hint { color: var(--muted); cursor: default; }
+.dir-list .empty-hint:hover { background: none; }
+
+.use-dir-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+}
+.current-path {
+  font-size: 0.85rem;
+  color: var(--muted);
+  word-break: break-all;
+}
+
+.preview-box {
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: var(--bg);
+  border-radius: var(--radius);
+  font-size: 0.85rem;
+}
+
+.double-page-row {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  font-size: 0.85rem;
+}
+.double-page-row label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.page-order-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 8px;
+  padding-left: 22px;
+  color: var(--muted);
+}
+.page-order-row[hidden] {
+  /* .page-order-row 的 display:flex 和浏览器默认的 [hidden]{display:none} 优先级相同,
+     后写的这条规则会覆盖前者,不加这条 [hidden] 规则的话 hidden 属性就不生效,
+     复选框没勾选时下面的单选项也会一直显示出来 */
+  display: none;
+}
+
+.progress-row { display: flex; align-items: center; gap: 12px; }
+.progress-track {
+  flex: 1;
+  height: 10px;
+  background: var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.progress-bar {
+  height: 100%;
+  width: 0%;
+  background: var(--accent);
+  transition: width 0.3s ease;
+}
+.progress-bar.indeterminate {
+  width: 40%;
+  animation: indeterminate 1.2s infinite ease-in-out;
+}
+@keyframes indeterminate {
+  0% { margin-left: -40%; }
+  100% { margin-left: 100%; }
+}
+#progress-text { font-size: 0.85rem; color: var(--muted); white-space: nowrap; }
+
+.job-error {
+  margin-top: 10px;
+  color: var(--danger);
+  font-size: 0.85rem;
+  white-space: pre-wrap;
+}
+
+.gallery-empty { color: var(--muted); font-size: 0.9rem; }
+
+.gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 16px;
+}
+
+.card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+}
+.card .cover-box {
+  aspect-ratio: 3 / 4;
+  background: var(--panel-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.card .cover-box img { width: 100%; height: 100%; object-fit: cover; }
+.card .cover-placeholder { color: var(--muted); font-size: 0.8rem; }
+.card.missing { opacity: 0.5; }
+
+.card .card-body { padding: 8px 10px; display: flex; flex-direction: column; gap: 4px; }
+.card .card-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.card .card-meta { font-size: 0.75rem; color: var(--muted); }
+.card .card-actions { display: flex; justify-content: flex-end; }
+.card .card-actions button {
+  padding: 4px 8px;
+  font-size: 0.75rem;
+  color: var(--danger);
+  border-color: var(--danger);
+}

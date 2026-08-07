@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>image2PDF</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<header class="topbar">
+  <h1>image2PDF</h1>
+  <p class="subtitle">选择一个本机文件夹,批量把里面的图片转换成 PDF</p>
+</header>
+
+<main>
+  <section class="panel browser-panel">
+    <h2>1. 选择文件夹</h2>
+
+    <div class="path-input-row">
+      <input id="path-input" type="text" placeholder="粘贴文件夹路径,例如 D:\comic\龙珠" autocomplete="off">
+      <button id="path-go-btn" type="button">跳转</button>
+    </div>
+
+    <div id="drive-chips" class="drive-chips"></div>
+
+    <nav id="breadcrumbs" class="breadcrumbs"></nav>
+
+    <div id="browse-error" class="browse-error" hidden></div>
+
+    <div class="dir-list-row">
+      <button id="up-btn" type="button" hidden>↑ 上一级</button>
+      <ul id="dir-list" class="dir-list"></ul>
+    </div>
+
+    <div class="use-dir-row">
+      <span id="current-path" class="current-path"></span>
+      <button id="use-dir-btn" type="button" disabled>使用此目录</button>
+    </div>
+
+    <div class="double-page-row">
+      <label><input type="checkbox" id="double-page-checkbox"> 双页模式(每张图其实是拼版的两页,转换时会自动左右对半切开)</label>
+      <div id="page-order-row" class="page-order-row" hidden>
+        <label><input type="radio" name="page-order" value="right" id="page-order-right"> 右边页码小(从右往左翻,如日式漫画)</label>
+        <label><input type="radio" name="page-order" value="left" id="page-order-left"> 左边页码小(从左往右翻,如西式漫画)</label>
+      </div>
+    </div>
+
+    <div id="preview-box" class="preview-box" hidden></div>
+  </section>
+
+  <section class="panel job-panel" id="job-panel" hidden>
+    <h2>转换进度</h2>
+    <div class="progress-row">
+      <div class="progress-track"><div id="progress-bar" class="progress-bar"></div></div>
+      <span id="progress-text"></span>
+    </div>
+    <div id="job-error" class="job-error" hidden></div>
+  </section>
+
+  <section class="panel gallery-panel">
+    <h2>2. 已生成的 PDF</h2>
+    <div id="gallery-empty" class="gallery-empty">还没有转换过任何文件夹</div>
+    <div id="gallery" class="gallery"></div>
+  </section>
+</main>
+
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
