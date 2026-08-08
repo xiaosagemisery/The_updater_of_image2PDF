@@ -16,6 +16,7 @@
   const pageOrderRow = document.getElementById("page-order-row");
   const pageOrderRight = document.getElementById("page-order-right");
   const pageOrderLeft = document.getElementById("page-order-left");
+  const splitJpegCheckbox = document.getElementById("split-jpeg-checkbox");
 
   const jobPanel = document.getElementById("job-panel");
   const progressBar = document.getElementById("progress-bar");
@@ -192,6 +193,10 @@
 
   doublePageCheckbox.addEventListener("change", () => {
     pageOrderRow.hidden = !doublePageCheckbox.checked;
+    // "拆分优先速度"和"双页模式"在 UI 上是两个独立的选项(不嵌套在双页设置区域里),
+    // 但它只在双页模式下才有实际效果(只有双页拆分才会产生临时半页文件),
+    // 所以双页模式关闭时把它禁用,而不是隐藏它。
+    splitJpegCheckbox.disabled = !doublePageCheckbox.checked;
   });
 
   // ---- 预览 + 开始转换 --------------------------------------------------
@@ -249,6 +254,7 @@
       path: path,
       double_page: doublePageCheckbox.checked,
       right_page_first: pageOrderRight.checked,
+      split_as_jpeg: splitJpegCheckbox.checked,
     };
     apiSend("/api/convert", "POST", body).then((data) => {
       localStorage.setItem("image2pdf_last_job", data.job_id);

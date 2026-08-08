@@ -2,6 +2,7 @@
 
 import os
 import shutil
+import time
 from pathlib import Path
 
 import pytest
@@ -37,6 +38,45 @@ def test_convert_one_dir_returns_pdf_and_first_page(tmp_path):
     assert os.path.exists(result["pdf_path"])
     assert result["page_count"] == 3
     assert Path(result["first_page"]).name == "p00.png"
+
+
+def test_convert_one_dir_places_pdf_next_to_source_dir_not_inside_it(tmp_path):
+    # PDF 应该和图片所在的目录同级(在它的上一级),不能塞进图片所在的目录内部,
+    # 否则会和一堆原始扫描图混在一起。
+    book_dir = tmp_path / "第01卷"
+    book_dir.mkdir()
+    for i in range(2):
+        Image.new("RGB", (100, 150)).save(book_dir / ("p%02d.png" % i))
+
+    results = image2pdf.convert_images2PDF_one_dir(str(book_dir))
+
+    pdf_path = Path(results[0]["pdf_path"])
+    assert pdf_path.parent == tmp_path  # 和 book_dir 同级,不是 book_dir 内部
+    assert pdf_path.name == "第01卷.pdf"
+    assert not (book_dir / "第01卷.pdf").exists()
+
+
+def test_convert_one_dir_with_save_name_also_places_pdf_next_to_source_dir(tmp_path):
+    book_dir = tmp_path / "第02卷"
+    book_dir.mkdir()
+    Image.new("RGB", (100, 150)).save(book_dir / "p00.png")
+
+    results = image2pdf.convert_images2PDF_one_dir(str(book_dir), save_name="自定义名字.pdf")
+
+    pdf_path = Path(results[0]["pdf_path"])
+    assert pdf_path.parent == tmp_path
+    assert pdf_path.name == "自定义名字.pdf"
+
+
+def test_convert_auto_one_dir_dispatch_also_places_pdf_next_to_source_dir(tmp_path):
+    book_dir = tmp_path / "漫画名"
+    book_dir.mkdir()
+    Image.new("RGB", (100, 150)).save(book_dir / "p00.png")
+
+    mode, results = image2pdf.convert_images2PDF_auto(str(book_dir))
+
+    assert mode == "one_dir"
+    assert Path(results[0]["pdf_path"]).parent == tmp_path
 
 
 def test_more_dirs_result_does_not_depend_on_converted_return(tmp_path, monkeypatch):
@@ -185,6 +225,69 @@ def test_split_double_page_images_left_first_puts_left_half_first(tmp_path):
         shutil.rmtree(temp_dir, ignore_errors=True)
 
 
+def test_split_double_page_images_default_still_produces_png(tmp_path):
+    # 回归护栏: 不传 split_as_jpeg 时必须还是无损 PNG,和引入这个参数之前完全一样
+    img_path = tmp_path / "spread.png"
+    _make_spread_image(img_path)
+
+    split_fn = image2pdf.__dict__["__split_double_page_images"]
+    expanded, temp_dir = split_fn([str(img_path)], True)
+    try:
+        assert all(p.endswith(".png") for p in expanded)
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+def test_split_double_page_images_as_jpeg_produces_jpg_and_keeps_order(tmp_path):
+    img_path = tmp_path / "spread.png"
+    _make_spread_image(img_path)  # 左=红 右=蓝
+
+    split_fn = image2pdf.__dict__["__split_double_page_images"]
+    expanded, temp_dir = split_fn([str(img_path)], True, split_as_jpeg=True)
+    try:
+        assert all(p.endswith(".jpg") for p in expanded)
+        with Image.open(expanded[0]) as first:
+            assert first.format == "JPEG"
+            # JPEG 有损,不能断言像素精确相等,只判断蓝色分量明显更高(右半=蓝排在前面)
+            px = first.getpixel((10, 10))
+            assert px[2] > px[0]
+        with Image.open(expanded[1]) as second:
+            px = second.getpixel((10, 10))
+            assert px[0] > px[2]  # 左半=红排在后面
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+def test_split_double_page_images_as_jpeg_composites_transparency_on_white(tmp_path):
+    # JPEG 没有透明通道,带 alpha 的半张图要先在白底上合成,不能直接 convert("RGB")
+    # 把透明区域变黑(和 web_gallery.make_cover 的处理是同一套逻辑)。
+    img_path = tmp_path / "spread_rgba.png"
+    w, h = 200, 100
+    im = Image.new("RGBA", (w, h), (0, 0, 0, 0))  # 全透明
+    im.paste((255, 0, 0, 255), (0, 0, w // 2, h))
+    im.paste((0, 0, 255, 255), (w // 2, 0, w, h))
+    im.save(img_path)
+
+    split_fn = image2pdf.__dict__["__split_double_page_images"]
+    expanded, temp_dir = split_fn([str(img_path)], True, split_as_jpeg=True)
+    try:
+        with Image.open(expanded[0]) as first:
+            assert first.mode == "RGB"
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+def test_convert_one_dir_with_split_as_jpeg(tmp_path):
+    for i in range(2):
+        _make_spread_image(tmp_path / ("p%02d.png" % i))
+
+    results = image2pdf.convert_images2PDF_one_dir(
+        str(tmp_path), double_page=True, right_page_first=True, split_as_jpeg=True)
+
+    assert results[0]["page_count"] == 4  # 2 张跨页图 x 2 半 = 4 页
+    assert os.path.exists(results[0]["pdf_path"])
+
+
 def test_double_page_doubles_page_count_and_cleans_up_temp_dir(tmp_path, monkeypatch):
     for i in range(2):
         _make_spread_image(tmp_path / ("p%02d.png" % i))
@@ -192,8 +295,8 @@ def test_double_page_doubles_page_count_and_cleans_up_temp_dir(tmp_path, monkeyp
     split_fn = image2pdf.__dict__["__split_double_page_images"]
     captured_temp_dirs = []
 
-    def spy(sorted_pages, right_page_first):
-        expanded, temp_dir = split_fn(sorted_pages, right_page_first)
+    def spy(sorted_pages, right_page_first, split_as_jpeg=False):
+        expanded, temp_dir = split_fn(sorted_pages, right_page_first, split_as_jpeg)
         captured_temp_dirs.append(temp_dir)
         return expanded, temp_dir
 
@@ -267,6 +370,33 @@ def test_api_convert_requires_right_page_first_when_double_page(tmp_path):
 
     assert resp.status_code == 400
     assert "right_page_first" in resp.get_json()["error"]
+
+
+def test_api_convert_accepts_split_as_jpeg_without_requiring_it(tmp_path, monkeypatch):
+    # split_as_jpeg 有安全默认值(False),不像 right_page_first 那样必须显式带上;
+    # 不传的时候也应该能正常接受请求(不是 400)。
+    monkeypatch.setattr(web_gallery, "DATA_DIR", str(tmp_path / "webdata"))
+    src_dir = tmp_path / "src"
+    src_dir.mkdir()
+    Image.new("RGB", (50, 80)).save(src_dir / "a.png")
+
+    client = webapp.app.test_client()
+    resp = client.post("/api/convert", json={
+        "path": str(src_dir), "double_page": True, "right_page_first": True, "split_as_jpeg": True,
+    })
+
+    assert resp.status_code == 202
+    job_id = resp.get_json()["job_id"]
+    with webapp._jobs_lock:
+        assert webapp._jobs[job_id]["split_as_jpeg"] is True
+
+    for _ in range(50):
+        with webapp._jobs_lock:
+            status = webapp._jobs[job_id]["status"]
+        if status in ("done", "error"):
+            break
+        time.sleep(0.05)
+    assert status == "done"
 
 
 # ---------------------------------------------------------------------------
@@ -347,6 +477,53 @@ def test_run_conversion_reports_percent_progress_more_dirs(tmp_path, monkeypatch
     assert job["percent"] == 100
     assert job["done"] == 2
     assert job["total"] == 2
+
+
+def test_run_conversion_empty_dir_sets_job_error_instead_of_raising(tmp_path, monkeypatch):
+    # /api/convert 不再提前用 web_fs.preview() 做一次同步的全树遍历来判断"有没有图片"
+    # (那是"点了开始转换迟迟没反应"的主因之一),所以这个判断挪到了这里:
+    # convert_images2PDF_auto 跑完发现 results 是空列表时,job 应该被标记成 error,
+    # 而不是让调用方看到一个未处理的异常或者误判成功。
+    monkeypatch.setattr(web_gallery, "DATA_DIR", str(tmp_path / "webdata"))
+    empty_dir = tmp_path / "empty"
+    empty_dir.mkdir()
+
+    job_id = webapp._new_job(str(empty_dir), "one_dir", 1)
+    webapp._run_conversion(job_id, str(empty_dir))
+
+    job = webapp._jobs[job_id]
+    assert job["status"] == "error"
+    assert "没有找到任何图片文件" in job["error"]
+
+
+def test_api_convert_returns_immediately_without_walking_whole_tree(tmp_path, monkeypatch):
+    # 回归护栏: /api/convert 不应该再调用 web_fs.preview (那是一次递归 os.walk)。
+    # 直接 monkeypatch 成"一调用就报错",确认请求路径完全不会碰它。
+    def _boom(*args, **kwargs):
+        raise AssertionError("/api/convert 不应该再调用 web_fs.preview")
+
+    monkeypatch.setattr(web_fs, "preview", _boom)
+    monkeypatch.setattr(web_gallery, "DATA_DIR", str(tmp_path / "webdata"))
+
+    src_dir = tmp_path / "src"
+    src_dir.mkdir()
+    Image.new("RGB", (10, 10)).save(src_dir / "a.png")
+
+    client = webapp.app.test_client()
+    resp = client.post("/api/convert", json={"path": str(src_dir)})
+
+    assert resp.status_code == 202
+    assert "job_id" in resp.get_json()
+
+    # 后台线程会真的跑起来转换这一张图,等它跑完避免干扰后续测试里的 _running_job_id 状态
+    job_id = resp.get_json()["job_id"]
+    for _ in range(50):
+        with webapp._jobs_lock:
+            status = webapp._jobs[job_id]["status"]
+        if status in ("done", "error"):
+            break
+        time.sleep(0.05)
+    assert status == "done"
 
 
 # ---------------------------------------------------------------------------

@@ -19,9 +19,16 @@ __rootDir = ""
 __page_progress_hook = None
 
 def convert_images2PDF_one_dir(file_dir, save_name=None, filename_sort_fn=None, on_book_done=None,
-                                double_page=False, right_page_first=True, on_page_progress=None):
+                                double_page=False, right_page_first=True, on_page_progress=None,
+                                split_as_jpeg=False):
     '''
-    转换一个目录文件夹下的图片至 PDF
+    转换一个目录文件夹下的图片至 PDF。生成的 PDF 保存在 file_dir 的**上一级目录**,
+    和 file_dir 本身同级(而不是塞进 file_dir 内部、混在源图片中间)——这样和
+    convert_images2PDF_more_dirs 的摆放习惯一致(每本书的 PDF 都和它对应的图片子目录
+    同级),也不会把 PDF 和一堆原始扫描图混在同一个文件夹里。file_dir 已经是盘符根
+    (例如 "C:\\")这种没有上一级的特殊情况会退化成原来的行为,PDF 还是落在 file_dir 内部
+    (os.path.dirname 在盘符根上是不动点,和 web_fs.parent_of 判断"是否已到盘符根"用的
+    是同一个机制)。
     :param file_dir:
     :param file_name: 如果为空,则以当前文件夹的名称命名, 必须是.pdf结尾
     :param filename_sort_fn:
@@ -62,6 +69,9 @@ def convert_images2PDF_one_dir(file_dir, save_name=None, filename_sort_fn=None, 
     页级转换进度回调,签名为 on_page_progress(book_number, book_total, page_done, page_total),
     在当前这本书渲染每一页时都会触发一次(通过 __page_progress_hook 挂到 __converted 内部循环上)。
     本函数只处理单本书,所以 book_number/book_total 恒为 1。默认不启用。
+    :param split_as_jpeg:
+    仅在 double_page=True 时生效,见 __split_double_page_images。默认 False(无损 PNG,
+    与引入这个参数之前完全一样)。
     :return: 本次转换生成的结果列表(见 __make_result),没有图片时为空列表
     '''
     book_pages = []
@@ -80,11 +90,13 @@ def convert_images2PDF_one_dir(file_dir, save_name=None, filename_sort_fn=None, 
             if __isAllow_file(file_path) :
                 book_pages.append(file_path)
 
-        # 取当前目录的文件名为书名
+        # PDF 保存在 file_dir 的上一级(和 file_dir 同级),取当前目录的文件名为书名
+        normalized_file_dir = os.path.normpath(file_dir)
+        pdf_save_dir = os.path.dirname(normalized_file_dir) or normalized_file_dir
         if save_name is None:
-            pdf_save_name = os.path.join(file_dir, (os.path.basename(file_dir) + ".pdf"))
+            pdf_save_name = os.path.join(pdf_save_dir, (os.path.basename(normalized_file_dir) + ".pdf"))
         else :
-            pdf_save_name = os.path.join(file_dir, save_name)
+            pdf_save_name = os.path.join(pdf_save_dir, save_name)
 
         if len(book_pages) > 0 :
             convert_pages = book_pages
@@ -94,7 +106,8 @@ def convert_images2PDF_one_dir(file_dir, save_name=None, filename_sort_fn=None, 
             try:
                 if double_page:
                     ordered_pages = __sort_pages(book_pages, filename_sort_fn)
-                    convert_pages, temp_dir = __split_double_page_images(ordered_pages, right_page_first)
+                    convert_pages, temp_dir = __split_double_page_images(
+                        ordered_pages, right_page_first, split_as_jpeg)
                     convert_sort_fn = None  # 展开后的临时文件名已经是最终顺序,不需要再排序
 
                 if on_page_progress is not None:
@@ -122,7 +135,8 @@ def convert_images2PDF_one_dir(file_dir, save_name=None, filename_sort_fn=None, 
 
 
 def convert_images2PDF_more_dirs(dirPath, filename_sort_fn=None, on_book_done=None,
-                                  double_page=False, right_page_first=True, on_page_progress=None):
+                                  double_page=False, right_page_first=True, on_page_progress=None,
+                                  split_as_jpeg=False):
     """
     转换一个目录文件夹下的图片至 PDF
     :param file_dir:
@@ -136,6 +150,7 @@ def convert_images2PDF_more_dirs(dirPath, filename_sort_fn=None, on_book_done=No
     页级转换进度回调,签名为 on_page_progress(book_number, book_total, page_done, page_total),
     在正在转换的这一本书渲染每一页时都会触发一次;book_number 是当前是第几本(1-based),
     book_total 是本次批量转换总共有几本。默认不启用。
+    :param split_as_jpeg: 见 convert_images2PDF_one_dir,对本次批量转换里的每一本书统一生效。
     :return: 本次转换生成的结果列表(见 __make_result)
     """
 
@@ -168,7 +183,8 @@ def convert_images2PDF_more_dirs(dirPath, filename_sort_fn=None, on_book_done=No
         try:
             if double_page:
                 ordered_pages = __sort_pages(pages, filename_sort_fn)
-                convert_pages, temp_dir = __split_double_page_images(ordered_pages, right_page_first)
+                convert_pages, temp_dir = __split_double_page_images(
+                    ordered_pages, right_page_first, split_as_jpeg)
                 convert_sort_fn = None
 
             if on_page_progress is not None:
@@ -198,7 +214,8 @@ def convert_images2PDF_more_dirs(dirPath, filename_sort_fn=None, on_book_done=No
 
 
 def convert_images2PDF_auto(dir_path, filename_sort_fn=None, on_book_done=None,
-                             double_page=False, right_page_first=True, on_page_progress=None):
+                             double_page=False, right_page_first=True, on_page_progress=None,
+                             split_as_jpeg=False):
     """
     按 __main__ 使用的规则自动判断:
     根目录顶层本身有图片 -> 当作一本书,调用 convert_images2PDF_one_dir;
@@ -210,6 +227,7 @@ def convert_images2PDF_auto(dir_path, filename_sort_fn=None, on_book_done=None,
     :param double_page: 见 convert_images2PDF_one_dir
     :param right_page_first: 见 convert_images2PDF_one_dir
     :param on_page_progress: 见 convert_images2PDF_one_dir / convert_images2PDF_more_dirs
+    :param split_as_jpeg: 见 convert_images2PDF_one_dir / convert_images2PDF_more_dirs
     :return: (mode, results) , mode 为 "one_dir" 或 "more_dirs"
     """
     if __has_top_level_images(dir_path):
@@ -217,12 +235,12 @@ def convert_images2PDF_auto(dir_path, filename_sort_fn=None, on_book_done=None,
             dir_path, save_name=None,
             filename_sort_fn=filename_sort_fn, on_book_done=on_book_done,
             double_page=double_page, right_page_first=right_page_first,
-            on_page_progress=on_page_progress)
+            on_page_progress=on_page_progress, split_as_jpeg=split_as_jpeg)
 
     return "more_dirs", convert_images2PDF_more_dirs(
         dir_path, filename_sort_fn=filename_sort_fn, on_book_done=on_book_done,
         double_page=double_page, right_page_first=right_page_first,
-        on_page_progress=on_page_progress)
+        on_page_progress=on_page_progress, split_as_jpeg=split_as_jpeg)
 
 
 def __isAllow_file(filepath):
@@ -279,22 +297,32 @@ def __make_result(pdf_path, source_dir, pages, filename_sort_fn=None):
     }
 
 
-def __split_double_page_images(sorted_pages, right_page_first):
+def __split_double_page_images(sorted_pages, right_page_first, split_as_jpeg=False):
     """
     把已经按最终阅读顺序排好的整页图片列表,逐张沿垂直中线切成左右两半,存到一个
     临时目录里,并按 right_page_first 决定每一对里谁的页码更小、谁排在前面。
 
-    临时文件名用零填充的序号前缀(00000_a.png / 00000_b.png / 00001_a.png ...),
+    临时文件名用零填充的序号前缀(00000_a.xxx / 00000_b.xxx / 00001_a.xxx ...),
     保证 __converted 内部再次执行的默认 sorted() 不会打乱这里已经确定好的最终顺序,
     因此调用方之后应该把 filename_sort_fn 传 None 给 __converted / __make_result。
 
     :param sorted_pages: 已经排好序的原始整页图片路径列表
     :param right_page_first: True=每张拼图右半边页码更小(排前面); False=左半边页码更小
+    :param split_as_jpeg:
+    临时半页文件存成什么格式,默认 False = 无损 PNG(和引入这个参数之前完全一样)。
+    True = 高质量 JPEG(quality=95)。这不只是"换个格式"这么简单: reportlab 的
+    Canvas.drawImage 拿到一个以 .jpg/.jpeg 结尾的文件名时,会直接把原始 JPEG 压缩字节流
+    原封不动塞进 PDF(DCTDecode,零解码零重新编码);但拿到 PNG 时,走的是完整 RGB 解码
+    + zlib 重新压缩的贵路径。真实漫画扫描页动辄 3000万-7000万像素,这个差距在双页模式下
+    (每页都要经过这里)非常可观。JPEG 不支持透明通道,如果裁出来的半张图带 alpha
+    (RGBA/LA/带透明度的 P 模式),要先合成到白底再存——和 web_gallery.make_cover
+    生成封面缩略图时用的是同一套处理逻辑,不要重新发明。
     :return: (expanded_pages, temp_dir), expanded_pages 是展开后的临时文件路径列表(已是最终顺序),
              temp_dir 是存放这些临时文件的目录,调用方转换结束后必须自行删除。
     """
     temp_dir = tempfile.mkdtemp(prefix="image2pdf_split_")
     expanded = []
+    ext = ".jpg" if split_as_jpeg else ".png"
 
     for index, page in enumerate(sorted_pages):
         with pilImage.open(page) as img:
@@ -312,10 +340,16 @@ def __split_double_page_images(sorted_pages, right_page_first):
             first_half, first_label = left_half, "左半"
             second_half, second_label = right_half, "右半"
 
-        first_path = os.path.join(temp_dir, "%05d_a.png" % index)
-        second_path = os.path.join(temp_dir, "%05d_b.png" % index)
-        first_half.save(first_path)
-        second_half.save(second_path)
+        first_path = os.path.join(temp_dir, "%05d_a%s" % (index, ext))
+        second_path = os.path.join(temp_dir, "%05d_b%s" % (index, ext))
+        if split_as_jpeg:
+            __save_split_half_as_jpeg(first_half, first_path)
+            __save_split_half_as_jpeg(second_half, second_path)
+        else:
+            # compress_level=0: 这些是马上就会被 __converted 读回、转换完立刻删除的临时
+            # 文件,从不会被用户直接打开,PNG 默认压缩级别在这里纯粹是浪费 CPU 时间。
+            first_half.save(first_path, compress_level=0)
+            second_half.save(second_path, compress_level=0)
 
         print("[*][拆分双页] : %s -> %s(page%d) + %s(page%d)" % (
             os.path.basename(page), first_label, index * 2 + 1, second_label, index * 2 + 2))
@@ -324,6 +358,23 @@ def __split_double_page_images(sorted_pages, right_page_first):
         expanded.append(second_path)
 
     return expanded, temp_dir
+
+
+def __save_split_half_as_jpeg(half, path):
+    """
+    把裁剪出来的半张图存成高质量 JPEG。JPEG 没有透明通道,带 alpha 的图要先在白底上
+    合成,和 web_gallery.make_cover 生成封面缩略图时处理 RGBA 源图是同一套逻辑
+    (直接 convert("RGB") 会把透明区域变黑)。
+    """
+    if half.mode in ("RGBA", "LA") or (half.mode == "P" and "transparency" in half.info):
+        rgba = half.convert("RGBA")
+        flat = pilImage.new("RGB", rgba.size, (255, 255, 255))
+        flat.paste(rgba, mask=rgba.split()[-1])
+        half = flat
+    elif half.mode != "RGB":
+        half = half.convert("RGB")  # P / L / 1 / CMYK 等
+
+    half.save(path, "JPEG", quality=95)
 
 
 def __converted(save_book_name, book_pages=None, filename_sort_fn=None):
@@ -343,6 +394,13 @@ def __converted(save_book_name, book_pages=None, filename_sort_fn=None):
     c = canvas.Canvas(save_book_name)
 
     for index, page in enumerate(book_pages):
+        # 注意: 这里特意把 page(文件名字符串)直接传给 pilImage.open 和 c.drawImage,
+        # 不要"优化"成先构造一个 ImageReader 对象复用。实测过 ImageReader 版本反而更慢:
+        # PIL 的 Image.open() 本身是惰性的,只读文件头拿 size,不会真的解码像素;而
+        # reportlab 的 Canvas.drawImage 在接收字符串文件名时,只用文件名本身算一个便宜的
+        # 去重 hash,真正的图片数据留到后面按需(JPEG 甚至可以整段直通、不必重新解码)处理。
+        # 但如果传的是 ImageReader 对象,drawImage 会先调用 image.getRGBData() 算去重 hash,
+        # 这一步会强制把整张图完整解码成 RGB 像素——相当于多做了一次全量解码,反而更慢。
         with pilImage.open(page) as img:
             img_w, img_h = img.size
 
@@ -390,6 +448,11 @@ def __build_arg_parser():
         "--left-first", action="store_true", dest="left_first",
         help="配合 --double-page 使用: 每张拼图里左半边代表的页码更小,应排在前面(如从左往右翻的漫画)")
 
+    parser.add_argument(
+        "--split-jpeg", action="store_true", dest="split_as_jpeg",
+        help="配合 --double-page 使用: 双页拆分出的临时半页文件存成高质量 JPEG 而不是无损 PNG,"
+             "能明显加快高分辨率扫描页的转换速度,但会引入一次额外的有损压缩(默认关闭,保持无损)")
+
     return parser
 
 
@@ -413,5 +476,6 @@ if __name__ == "__main__":
             dir_path,
             double_page=cli_args.double_page,
             right_page_first=cli_args.right_first,
+            split_as_jpeg=cli_args.split_as_jpeg,
         )
         print("脚本执行完成...")

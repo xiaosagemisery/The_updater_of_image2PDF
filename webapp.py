@@ -47,7 +47,8 @@ def _compute_percent(book_number, book_total, page_done, page_total):
     return min(100, round(fraction * 100))
 
 
-def _new_job(path, mode_hint, total_hint, double_page=False, right_page_first=True):
+def _new_job(path, mode_hint, total_hint, double_page=False, right_page_first=True,
+             split_as_jpeg=False):
     job_id = "job-%s" % uuid.uuid4().hex[:12]
     _jobs[job_id] = {
         "id": job_id,
@@ -60,6 +61,7 @@ def _new_job(path, mode_hint, total_hint, double_page=False, right_page_first=Tr
         "item_ids": [],
         "double_page": double_page,
         "right_page_first": right_page_first,
+        "split_as_jpeg": split_as_jpeg,
         "page_done": None,
         "page_total": None,
         "percent": 0,
@@ -70,7 +72,7 @@ def _new_job(path, mode_hint, total_hint, double_page=False, right_page_first=Tr
     return job_id
 
 
-def _run_conversion(job_id, path, double_page=False, right_page_first=True):
+def _run_conversion(job_id, path, double_page=False, right_page_first=True, split_as_jpeg=False):
     try:
         def on_book_done(result, done, total):
             item = web_gallery.upsert_result(result, batch_id=job_id)
@@ -96,16 +98,24 @@ def _run_conversion(job_id, path, double_page=False, right_page_first=True):
 
         mode, results = image2pdf.convert_images2PDF_auto(
             path, on_book_done=on_book_done, on_page_progress=on_page_progress,
-            double_page=double_page, right_page_first=right_page_first)
+            double_page=double_page, right_page_first=right_page_first,
+            split_as_jpeg=split_as_jpeg)
 
         with _jobs_lock:
             job = _jobs.get(job_id)
             if job is not None:
-                job["status"] = "done"
-                job["mode"] = mode
-                job["total"] = len(results)
-                job["done"] = len(results)
-                job["percent"] = 100
+                if len(results) == 0:
+                    # /api/convert 不再提前做一次全树遍历来判断"目录里到底有没有图片"
+                    # (那次遍历本身就是"准备很久才开始转换"的主因之一),所以这个判断
+                    # 挪到这里、拿到 convert_images2PDF_auto 的真实结果之后再做。
+                    job["status"] = "error"
+                    job["error"] = "该目录及其子目录下没有找到任何图片文件"
+                else:
+                    job["status"] = "done"
+                    job["mode"] = mode
+                    job["total"] = len(results)
+                    job["done"] = len(results)
+                    job["percent"] = 100
                 job["finished_at"] = time.time()
     except Exception:
         with _jobs_lock:
@@ -257,26 +267,32 @@ def api_convert():
     right_page_first = bool(body.get("right_page_first", True))
     if double_page and "right_page_first" not in body:
         return jsonify({"error": "开启双页模式时必须指定哪边页码小(right_page_first)"}), 400
+    # split_as_jpeg 有安全的默认值(False=无损 PNG,和原来的行为一样),不需要像
+    # right_page_first 那样强制要求前端必须显式带上这个字段。
+    split_as_jpeg = bool(body.get("split_as_jpeg", False))
 
     global _running_job_id
     with _jobs_lock:
         if _running_job_id is not None:
             return jsonify({"error": "已有任务在运行", "job_id": _running_job_id}), 409
 
+        # 这里不再调用 web_fs.preview(path) 做一次递归的全树遍历统计页数——那是"点了
+        # 开始转换之后迟迟没反应"的主因,而且 /api/preview 在用户点"使用此目录"时已经
+        # 走过一次、马上 convert_images2PDF_auto 内部自己的遍历又要走一次,重复了三次。
+        # 这里只做一次廉价的顶层判断猜一下 mode,真实的 book 数量在后台线程真正跑起来、
+        # on_book_done/on_page_progress 拿到第一次真实数据时会自动纠正 job["total"]。
         try:
-            preview = web_fs.preview(path)
+            mode_hint = "one_dir" if web_fs._has_top_level_images(path) else "more_dirs"
         except PermissionError:
             return jsonify({"error": "没有权限读取该目录"}), 403
 
-        if preview["book_count"] == 0:
-            return jsonify({"error": "该目录及其子目录下没有找到任何图片文件"}), 400
-
-        job_id = _new_job(path, preview["mode"], preview["book_count"],
-                           double_page=double_page, right_page_first=right_page_first)
+        job_id = _new_job(path, mode_hint, 1, double_page=double_page,
+                           right_page_first=right_page_first, split_as_jpeg=split_as_jpeg)
         _running_job_id = job_id
 
     thread = threading.Thread(
-        target=_run_conversion, args=(job_id, path, double_page, right_page_first), daemon=True)
+        target=_run_conversion, args=(job_id, path, double_page, right_page_first, split_as_jpeg),
+        daemon=True)
     thread.start()
 
     return jsonify({"job_id": job_id}), 202
