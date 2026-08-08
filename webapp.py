@@ -291,7 +291,8 @@ def api_convert():
         _running_job_id = job_id
 
     thread = threading.Thread(
-        target=_run_conversion, args=(job_id, path, double_page, right_page_first, split_as_jpeg),
+        target=_run_conversion,
+        args=(job_id, path, double_page, right_page_first, split_as_jpeg),
         daemon=True)
     thread.start()
 

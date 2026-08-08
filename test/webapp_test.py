@@ -186,7 +186,8 @@ def test_on_page_progress_default_none_no_behavior_change(tmp_path):
     results = image2pdf.convert_images2PDF_one_dir(str(tmp_path))  # 不传 on_page_progress
 
     assert results[0]["page_count"] == 3
-    assert image2pdf.__dict__["__page_progress_hook"] is None  # 用完之后钩子必须复位
+    # 用完之后钩子必须复位
+    assert image2pdf.__dict__["__page_progress_hook"] is None
 
 
 # ---------------------------------------------------------------------------
@@ -641,3 +642,38 @@ def test_gallery_delete_removes_cover_but_not_pdf(tmp_path, monkeypatch):
     assert not os.path.exists(cover_full)
     assert pdf_path.exists()  # PDF 本身绝不能被删除
     assert web_gallery.list_items() == []
+
+
+# ---------------------------------------------------------------------------
+# reportlab useA85: 关掉纯 Python 的 ASCII85 编码(性能瓶颈,见 Image2PDF.py 头部说明)
+# ---------------------------------------------------------------------------
+
+def test_use_a85_disabled_on_import():
+    import reportlab.rl_config
+    assert reportlab.rl_config.useA85 == 0
+
+
+def test_converted_jpeg_pdf_has_no_ascii85_filter(tmp_path):
+    # JPEG 直通路径(loadImageFromJPEG):关掉 useA85 后不应再套 ASCII85Decode,
+    # 但 DCTDecode 直通本身要继续生效。
+    book_dir = tmp_path / "book"
+    book_dir.mkdir()
+    Image.new("RGB", (60, 80), (10, 20, 30)).save(book_dir / "p00.jpg", "JPEG")
+
+    results = image2pdf.convert_images2PDF_one_dir(str(book_dir))
+
+    pdf_bytes = Path(results[0]["pdf_path"]).read_bytes()
+    assert b"/ASCII85Decode" not in pdf_bytes
+    assert b"/DCTDecode" in pdf_bytes
+
+
+def test_converted_png_pdf_has_no_ascii85_filter(tmp_path):
+    # PNG/raw 路径(loadImageFromA85/loadImageFromRaw):同样不应再套 ASCII85Decode。
+    book_dir = tmp_path / "book"
+    book_dir.mkdir()
+    Image.new("RGB", (60, 80), (10, 20, 30)).save(book_dir / "p00.png")
+
+    results = image2pdf.convert_images2PDF_one_dir(str(book_dir))
+
+    pdf_bytes = Path(results[0]["pdf_path"]).read_bytes()
+    assert b"/ASCII85Decode" not in pdf_bytes
