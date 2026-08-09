@@ -1,6 +1,7 @@
 import argparse
 import os
 import shutil
+import sys
 import tempfile
 import time
 from PIL import Image as pilImage
@@ -492,3 +493,9 @@ if __name__ == "__main__":
             split_as_jpeg=cli_args.split_as_jpeg,
         )
         print("脚本执行完成...")
+
+    if getattr(sys, "frozen", False):
+        # 双击 exe 运行时,脚本一结束控制台窗口就会立刻关掉,用户根本来不及看到
+        # 上面的转换结果/报错信息。源码方式 `python Image2PDF.py` 运行时 sys.frozen
+        # 不存在(getattr 默认值走 False),这个分支不会执行,行为和之前完全一样。
+        input("按回车键退出...")

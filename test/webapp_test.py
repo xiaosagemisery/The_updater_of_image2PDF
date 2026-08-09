@@ -2,6 +2,7 @@
 
 import os
 import shutil
+import sys
 import time
 from pathlib import Path
 
@@ -677,3 +678,33 @@ def test_converted_png_pdf_has_no_ascii85_filter(tmp_path):
 
     pdf_bytes = Path(results[0]["pdf_path"]).read_bytes()
     assert b"/ASCII85Decode" not in pdf_bytes
+
+
+# ---------------------------------------------------------------------------
+# PyInstaller 打包: 冻结后 __file__/sys._MEIPASS 的行为和源码运行时不一样,
+# _default_data_dir()/_resource_dir() 就是为了在两种环境下都取到正确路径。
+# 不需要真的打包成 exe 也能测: 用 monkeypatch 模拟 sys.frozen/sys._MEIPASS。
+# ---------------------------------------------------------------------------
+
+def test_default_data_dir_source_run_is_repo_webdata(monkeypatch):
+    monkeypatch.delattr(sys, "frozen", raising=False)
+    assert web_gallery._default_data_dir() == os.path.join(web_gallery.BASE_DIR, "webdata")
+
+
+def test_default_data_dir_frozen_is_next_to_exe(monkeypatch, tmp_path):
+    fake_exe = tmp_path / "dist" / "image2PDF-web.exe"
+    fake_exe.parent.mkdir(parents=True)
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "executable", str(fake_exe))
+
+    assert web_gallery._default_data_dir() == str(fake_exe.parent / "webdata")
+
+
+def test_resource_dir_source_run_is_webapp_dir(monkeypatch):
+    monkeypatch.delattr(sys, "_MEIPASS", raising=False)
+    assert webapp._resource_dir() == os.path.dirname(os.path.abspath(webapp.__file__))
+
+
+def test_resource_dir_frozen_is_meipass(monkeypatch, tmp_path):
+    monkeypatch.setattr(sys, "_MEIPASS", str(tmp_path), raising=False)
+    assert webapp._resource_dir() == str(tmp_path)

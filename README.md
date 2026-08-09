@@ -17,6 +17,22 @@
 * 除了命令行方式，还提供一个本地网页界面：在浏览器里点选文件夹即可转换，转换完成后可以在 Gallery 里查看每本书的封面。
 * 支持"双页拼图"拆分：如果图片内容其实是两页拼在一起的跨页图（常见于扫描/截图得到的漫画双页），可以开启双页模式，转换时自动沿垂直中线把每张图左右各切成一页，并按你指定的阅读方向排好页码顺序。
 
+## 用法零：直接下载 exe（不用装 Python）
+
+不想装 Python 环境的话，可以直接下载打包好的 exe，双击就能用：
+
+* 网页界面版：[image2PDF-web.exe](https://github.com/xiaosagemisery/The_updater_of_image2PDF/releases/latest/download/image2PDF-web.exe)
+* 命令行版：[image2PDF-cli.exe](https://github.com/xiaosagemisery/The_updater_of_image2PDF/releases/latest/download/image2PDF-cli.exe)
+
+这两个链接永远指向最新一次构建（每次仓库的 `master` 分支有代码更新，GitHub Actions 会自动重新打包并替换 Release 里的文件，链接本身不变）。也可以去 [Releases 页面](https://github.com/xiaosagemisery/The_updater_of_image2PDF/releases)手动挑一个带版本号的历史版本下载。
+
+用法和下面"用法一/用法二"完全一样，只是不需要 `pip install`、不需要敲 `python xxx.py`，直接双击 exe 代替对应的命令：
+
+* `image2PDF-web.exe` 对应 `python webapp.py`——双击后会自动打开浏览器，其余操作参考下面"用法二：网页界面"。转换记录（`webdata\` 文件夹，含 Gallery 索引和封面缩略图）会生成在 exe **所在的同一个目录**下，把 exe 连同这个文件夹一起拷走就能带上所有历史记录；如果 exe 放在没有写入权限的目录（比如 `C:\Program Files`）里，需要挪到一个自己有权限写入的目录（比如桌面或专门建的文件夹）再运行。
+* `image2PDF-cli.exe` 对应 `python Image2PDF.py`（含 `--double-page`/`--right-first`/`--left-first`/`--split-jpeg` 这些命令行参数，用法见下面"用法一"），区别是双击运行、脚本跑完之后窗口不会立刻关掉，会停在"按回车键退出..."，方便看清楚转换结果或报错信息再关闭。
+
+**这两个 exe 都没有做代码签名**，Windows 双击运行时大概率会被 SmartScreen 拦一下（提示"Windows 已保护你的电脑"），点"更多信息" → "仍要运行"即可继续；部分杀毒软件也可能因为"未知发布者"报个警，属于未签名程序的正常现象，不是病毒（如果不放心，可以直接读源码或本地用下面的方式自己打包）。
+
 ## 安装依赖
 
 ```bash
@@ -154,7 +170,17 @@ Gallery 里的记录会持续累积、不会互相覆盖，即使关掉终端重
 **可选的环境变量**（在启动 `python webapp.py` 之前设置）：
 
 * `PORT`：修改网页服务监听的端口，默认 `5000`。
-* `IMAGE2PDF_DATA_DIR`：修改 Gallery 数据（索引 `gallery.json` 和封面缩略图）的存放目录，默认是项目目录下的 `webdata/`（该目录已加入 `.gitignore`，不会被提交到仓库）。
+* `IMAGE2PDF_DATA_DIR`：修改 Gallery 数据（索引 `gallery.json` 和封面缩略图）的存放目录，源码方式运行默认是项目目录下的 `webdata/`（该目录已加入 `.gitignore`，不会被提交到仓库）；打包成 exe 运行时默认改成 exe 所在目录下的 `webdata/`（见上面"用法零"）。这个环境变量在两种运行方式下都优先于各自的默认值生效。
+
+## 本地打包成 exe（开发者用，一般用户直接下载"用法零"里的现成 exe 即可）
+
+```bash
+pip install -r requirements.txt -r requirements-build.txt
+pyinstaller image2PDF-web.spec
+pyinstaller image2PDF-cli.spec
+```
+
+产物在 `dist/image2PDF-web.exe`、`dist/image2PDF-cli.exe`（`dist/`、`build/` 已加入 `.gitignore`，不会被提交）。仓库根目录下的 `image2PDF-web.spec`/`image2PDF-cli.spec` 是打包配置，`.github/workflows/build-exe.yml` 这个 GitHub Actions 工作流在 `windows-latest` runner 上用同一份 spec 自动构建：每次 push 到 `master`（且改动了代码）会跑一遍测试、打包、冒烟测试，通过后覆盖更新 [Releases](https://github.com/xiaosagemisery/The_updater_of_image2PDF/releases) 里固定的 `latest` 版本；手动 push 一个 `v1.2.1` 这样的 tag 则会额外创建一个带版本号、永久保留的正式 Release。
 
 ## 运行测试
 

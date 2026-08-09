@@ -1,0 +1,128 @@
+name: 构建并发布 exe
+
+# exe 只能在 Windows 上构建(PyInstaller 不能交叉编译),所以这个工作流全程跑在
+# windows-latest runner 上。
+#
+# 触发条件:
+#   - push 到 master 且改动了代码(paths-ignore 排除纯文档改动) -> 滚动更新 latest Release
+#   - push 一个 v* 开头的 tag -> 额外创建一个带版本号、永久保留的 Release
+#   - workflow_dispatch: 手动触发,用于 paths-ignore 导致 tag push 没能自动触发时的兜底
+on:
+  push:
+    branches: [master]
+    tags: ['v*']
+    paths-ignore:
+      - '**.md'
+      - '.gitignore'
+      - '.claude/**'
+  workflow_dispatch:
+
+# 创建/更新 Release 需要写权限,默认的 GITHUB_TOKEN 只有读权限。
+permissions:
+  contents: write
+
+# 连续 push 时,后一次构建会取消前一次还没跑完的构建,避免两次构建同时抢着
+# 覆盖同一个 latest Release。
+concurrency:
+  group: build-exe
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: 安装依赖
+        run: pip install -r requirements.txt -r requirements-build.txt
+
+      - name: 运行测试(测试不过就不打包/不发布)
+        run: python -m pytest -q
+
+      - name: 打包 image2PDF-web.exe
+        run: pyinstaller image2PDF-web.spec
+
+      - name: 打包 image2PDF-cli.exe
+        run: pyinstaller image2PDF-cli.spec
+
+      - name: 冒烟测试 image2PDF-web.exe
+        shell: pwsh
+        run: |
+          $env:PORT = "5057"
+          $env:IMAGE2PDF_DATA_DIR = Join-Path $env:RUNNER_TEMP "image2pdf-web-smoke-data"
+          $proc = Start-Process -FilePath "dist\image2PDF-web.exe" -PassThru
+          $ok = $false
+          try {
+            for ($i = 0; $i -lt 30; $i++) {
+              Start-Sleep -Seconds 1
+              try {
+                $resp = Invoke-WebRequest -Uri "http://127.0.0.1:5057/" -UseBasicParsing -TimeoutSec 3
+                if ($resp.StatusCode -eq 200 -and $resp.Content -match "image2PDF") {
+                  $ok = $true
+                  break
+                }
+              } catch {
+                # 服务器还没起来,继续轮询
+              }
+            }
+          } finally {
+            Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+          }
+          if (-not $ok) {
+            Write-Error "image2PDF-web.exe 冒烟测试失败: 30 秒内没能访问到页面(可能是 templates/static 没打进 exe,或 reportlab 数据文件缺失)"
+            exit 1
+          }
+          Write-Host "image2PDF-web.exe 冒烟测试通过"
+
+      - name: 冒烟测试 image2PDF-cli.exe
+        shell: pwsh
+        run: |
+          $smokeDir = Join-Path $env:RUNNER_TEMP "image2pdf-cli-smoke"
+          New-Item -ItemType Directory -Path $smokeDir -Force | Out-Null
+          python -c "from PIL import Image; import os; d = r'$smokeDir'; [Image.new('RGB', (60, 80), (i * 40, 0, 0)).save(os.path.join(d, 'p%d.png' % i)) for i in range(3)]"
+
+          # 第一行喂给"请输入图片所在的文件夹路径",第二行(空行)喂给冻结模式下
+          # 结尾的"按回车键退出",否则 exe 会在那里等待输入直到管道 EOF 报错退出。
+          @($smokeDir, "") | dist\image2PDF-cli.exe
+
+          $pdfPath = Join-Path $env:RUNNER_TEMP "image2pdf-cli-smoke.pdf"
+          if (-not (Test-Path $pdfPath)) {
+            Write-Error "image2PDF-cli.exe 冒烟测试失败: 没有生成期望的 PDF ($pdfPath)"
+            exit 1
+          }
+          Write-Host "image2PDF-cli.exe 冒烟测试通过: $pdfPath"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: image2PDF-exe
+          path: |
+            dist/image2PDF-web.exe
+            dist/image2PDF-cli.exe
+
+      - name: 滚动发布 latest Release(push 到 master)
+        if: github.ref == 'refs/heads/master'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # latest 不存在时 delete 会失败,直接忽略、继续创建新的即可。
+          gh release delete latest --yes --cleanup-tag
+          gh release create latest dist\image2PDF-web.exe dist\image2PDF-cli.exe `
+            --title "最新构建 (latest)" `
+            --notes "自动构建自 master 分支 commit ${{ github.sha }}。这是滚动发布,每次 push 到 master 都会覆盖成最新的 exe。固定下载链接: https://github.com/${{ github.repository }}/releases/latest/download/image2PDF-web.exe" `
+            --target ${{ github.sha }}
+
+      - name: 发布带版本号的 Release(push tag)
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ github.ref_name }}" dist\image2PDF-web.exe dist\image2PDF-cli.exe `
+            --title "${{ github.ref_name }}" `
+            --notes "版本 ${{ github.ref_name }}"

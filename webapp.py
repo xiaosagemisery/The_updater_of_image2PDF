@@ -11,6 +11,7 @@
 """
 
 import os
+import sys
 import threading
 import time
 import traceback
@@ -24,7 +25,20 @@ import Image2PDF as image2pdf
 import web_fs
 import web_gallery
 
-app = Flask(__name__)
+
+def _resource_dir():
+    """
+    templates/static 这两个目录所在的位置。源码运行时就是本文件所在目录(和
+    Flask(__name__) 默认推算的位置一样)。PyInstaller onefile 冻结后,这两个
+    目录会被解压到 sys._MEIPASS 这个临时目录下,Flask 靠 __file__ 做的默认推算
+    在冻结环境里不可靠,必须显式指过去,否则打开页面直接 TemplateNotFound。
+    """
+    return getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
+
+
+app = Flask(__name__,
+            template_folder=os.path.join(_resource_dir(), "templates"),
+            static_folder=os.path.join(_resource_dir(), "static"))
 
 
 # ---------------------------------------------------------------------------

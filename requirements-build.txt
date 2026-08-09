@@ -1,0 +1,7 @@
+# Only needed to package this project into a standalone exe (PyInstaller).
+# Not required to run or develop the project day-to-day, so it is kept out of
+# requirements.txt. Usage:
+#   pip install -r requirements.txt -r requirements-build.txt
+#   pyinstaller image2PDF-web.spec
+#   pyinstaller image2PDF-cli.spec
+pyinstaller>=6.0

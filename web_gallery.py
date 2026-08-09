@@ -16,6 +16,7 @@ Gallery 的持久化: 每次转换生成的 PDF 对应一张封面缩略图 + �
 import hashlib
 import json
 import os
+import sys
 import threading
 import time
 
@@ -25,8 +26,21 @@ from PIL import UnidentifiedImageError
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+
+def _default_data_dir():
+    """
+    源码运行: 仓库下的 webdata/(和一直以来完全一样)。
+    PyInstaller 冻结成 exe 后: exe 同级目录下的 webdata/——绝不能用 __file__,
+    那会指向 sys._MEIPASS 这个每次运行临时解压、退出即删的目录,Gallery 会每次
+    重启就清空、封面全丢。用 sys.executable(exe 自身的路径)而不是 __file__ 来定位。
+    """
+    if getattr(sys, "frozen", False):
+        return os.path.join(os.path.dirname(os.path.abspath(sys.executable)), "webdata")
+    return os.path.join(BASE_DIR, "webdata")
+
+
 # 用模块属性(而不是常量)存目录路径,方便测试用 monkeypatch 指到 tmp_path
-DATA_DIR = os.environ.get("IMAGE2PDF_DATA_DIR") or os.path.join(BASE_DIR, "webdata")
+DATA_DIR = os.environ.get("IMAGE2PDF_DATA_DIR") or _default_data_dir()
 
 THUMB_SIZE = (360, 480)
 
