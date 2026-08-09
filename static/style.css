@@ -34,9 +34,9 @@ body {
 
 .topbar {
   padding: 20px 24px 8px;
+  text-align: center;
 }
-.topbar h1 { margin: 0 0 4px; font-size: 1.4rem; }
-.subtitle { margin: 0; color: var(--muted); font-size: 0.9rem; }
+.topbar h1 { margin: 0; font-size: 1.4rem; }
 
 main {
   max-width: 960px;
