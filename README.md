@@ -23,10 +23,10 @@
 
 不想装 Python 环境的话，可以直接下载打包好的 exe，双击就能用：
 
-* 网页界面版：[image2PDF-web.exe](https://github.com/xiaosagemisery/The_updater_of_image2PDF/releases/latest/download/image2PDF-web.exe)
-* 命令行版：[image2PDF-cli.exe](https://github.com/xiaosagemisery/The_updater_of_image2PDF/releases/latest/download/image2PDF-cli.exe)
+* 网页界面版：[image2PDF-web.exe](https://github.com/xiaosagemisery/PageWeave/releases/latest/download/image2PDF-web.exe)
+* 命令行版：[image2PDF-cli.exe](https://github.com/xiaosagemisery/PageWeave/releases/latest/download/image2PDF-cli.exe)
 
-这两个链接永远指向最新一次构建（每次仓库的 `master` 分支有代码更新，GitHub Actions 会自动重新打包并替换 Release 里的文件，链接本身不变）。也可以去 [Releases 页面](https://github.com/xiaosagemisery/The_updater_of_image2PDF/releases)手动挑一个带版本号的历史版本下载。
+这两个链接永远指向最新一次构建（每次仓库的 `master` 分支有代码更新，GitHub Actions 会自动重新打包并替换 Release 里的文件，链接本身不变）。也可以去 [Releases 页面](https://github.com/xiaosagemisery/PageWeave/releases)手动挑一个带版本号的历史版本下载。
 
 用法和下面"用法一/用法二"完全一样，只是不需要 `pip install`、不需要敲 `python xxx.py`，直接双击 exe 代替对应的命令：
 
@@ -182,7 +182,7 @@ pyinstaller image2PDF-web.spec
 pyinstaller image2PDF-cli.spec
 ```
 
-产物在 `dist/image2PDF-web.exe`、`dist/image2PDF-cli.exe`（`dist/`、`build/` 已加入 `.gitignore`，不会被提交）。仓库根目录下的 `image2PDF-web.spec`/`image2PDF-cli.spec` 是打包配置，`.github/workflows/build-exe.yml` 这个 GitHub Actions 工作流在 `windows-latest` runner 上用同一份 spec 自动构建：每次 push 到 `master`（且改动了代码）会跑一遍测试、打包、冒烟测试，通过后覆盖更新 [Releases](https://github.com/xiaosagemisery/The_updater_of_image2PDF/releases) 里固定的 `latest` 版本；手动 push 一个 `v1.2.1` 这样的 tag 则会额外创建一个带版本号、永久保留的正式 Release。
+产物在 `dist/image2PDF-web.exe`、`dist/image2PDF-cli.exe`（`dist/`、`build/` 已加入 `.gitignore`，不会被提交）。仓库根目录下的 `image2PDF-web.spec`/`image2PDF-cli.spec` 是打包配置，`.github/workflows/build-exe.yml` 这个 GitHub Actions 工作流在 `windows-latest` runner 上用同一份 spec 自动构建：每次 push 到 `master`（且改动了代码）会跑一遍测试、打包、冒烟测试，通过后覆盖更新 [Releases](https://github.com/xiaosagemisery/PageWeave/releases) 里固定的 `latest` 版本；手动 push 一个 `v1.3.1` 这样的 tag 则会额外创建一个带版本号、永久保留的正式 Release。
 
 ## 运行测试
 
