@@ -1,4 +1,6 @@
-# image2PDF
+# 拾页 PageWeave
+
+> 原项目名 image2PDF；脚本文件（`Image2PDF.py`）、打包出的 exe 文件名（`image2PDF-web.exe`/`image2PDF-cli.exe`）保持不变，只是改了对外展示的项目名。
 
 > 运行环境：Python 3.x 以上（已在 Python 3.11 / 3.12 上验证）
 
@@ -118,7 +120,7 @@ python webapp.py
 终端会打印类似下面的内容，说明服务已经启动：
 
 ```
-[*] image2PDF 网页界面已启动: http://127.0.0.1:5000
+[*] 拾页 PageWeave 网页界面已启动: http://127.0.0.1:5000
  * Running on http://127.0.0.1:5000
 ```
 

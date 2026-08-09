@@ -359,7 +359,7 @@ def covers(filename):
 def main():
     port = int(os.environ.get("PORT", 5000))
     url = "http://127.0.0.1:%d" % port
-    print("[*] image2PDF 网页界面已启动: %s" % url)
+    print("[*] 拾页 PageWeave 网页界面已启动: %s" % url)
     threading.Timer(1.0, lambda: webbrowser.open(url)).start()
 
     # use_reloader=False: reloader 会重新执行整个模块,产生两份任务/Gallery状态,

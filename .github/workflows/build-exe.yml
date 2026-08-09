@@ -62,7 +62,7 @@ jobs:
               Start-Sleep -Seconds 1
               try {
                 $resp = Invoke-WebRequest -Uri "http://127.0.0.1:5057/" -UseBasicParsing -TimeoutSec 3
-                if ($resp.StatusCode -eq 200 -and $resp.Content -match "image2PDF") {
+                if ($resp.StatusCode -eq 200 -and $resp.Content -match "PageWeave") {
                   $ok = $true
                   break
                 }
