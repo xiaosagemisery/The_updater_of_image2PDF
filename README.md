@@ -6,7 +6,7 @@
 
 > Python 依赖包：Pillow（PIL）、reportlab、Flask（用于网页界面）、pytest（用于测试）
 
-> Version：V1.2.0
+> Version：V1.3.0
 
 > Author：liu.qi
 
