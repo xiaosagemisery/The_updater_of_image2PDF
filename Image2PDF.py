@@ -8,6 +8,18 @@ from PIL import Image as pilImage
 import reportlab.rl_config
 from reportlab.pdfgen import canvas
 
+# Windows 控制台代码页不是中文(比如英文 locale 下常见的 cp1252)时,print()/input() 遇到
+# 编码不出的中文字符会直接抛 UnicodeEncodeError 让整个程序崩溃——打包成 exe 后在 GitHub
+# Actions 的 windows-latest runner(cp1252)上跑冒烟测试时就是这样先崩的。reconfigure 成
+# errors="replace" 只是让编码不出的字符退化成替代符,不影响能正常显示中文的控制台(用户
+# 机器常见的 GBK/936 代码页本来就能编码这些字符,这里是无操作)。放在模块顶层(而不是只在
+# __main__ 里)是因为 webapp.py 也 `import Image2PDF as image2pdf`,这样两个入口都能覆盖到,
+# 不需要在 webapp.py 里再写一遍。
+for __stream in (sys.stdout, sys.stderr):
+    if __stream is not None and hasattr(__stream, "reconfigure"):
+        __stream.reconfigure(errors="replace")
+del __stream
+
 # reportlab 默认(useA85=1)会把每张图片编码后的二进制流再套一层 ASCII Base85 编码
 # (ASCII85Decode filter)——这是给某些只认文本、不支持二进制流的老旧/受限环境准备的兼容选项,
 # 现代 PDF 阅读器都能正常处理二进制流,用不上这层编码。但这层编码在 reportlab 内部
